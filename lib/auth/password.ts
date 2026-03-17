@@ -1,4 +1,4 @@
-const PBKDF2_ITERATIONS = 120000;
+const PBKDF2_ITERATIONS = 100000;
 const HASH_BITS = 256;
 const SALT_BYTES = 16;
 
@@ -19,6 +19,7 @@ function fromBase64Url(value: string): Uint8Array {
 async function deriveKey(
   password: string,
   salt: Uint8Array,
+  iterations: number,
 ): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const normalizedSalt = new Uint8Array(salt);
@@ -35,7 +36,7 @@ async function deriveKey(
       name: "PBKDF2",
       hash: "SHA-256",
       salt: normalizedSalt,
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
     },
     keyMaterial,
     HASH_BITS,
@@ -46,7 +47,7 @@ async function deriveKey(
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const hash = await deriveKey(password, salt);
+  const hash = await deriveKey(password, salt, PBKDF2_ITERATIONS);
 
   return `pbkdf2_sha256$${PBKDF2_ITERATIONS}$${toBase64Url(salt)}$${toBase64Url(hash)}`;
 }
@@ -61,9 +62,19 @@ export async function verifyPassword(
     return false;
   }
 
+  const iterations = Number.parseInt(parts[1], 10);
+
+  if (!Number.isFinite(iterations) || iterations <= 0) {
+    return false;
+  }
+
+  if (iterations > PBKDF2_ITERATIONS) {
+    return false;
+  }
+
   const salt = fromBase64Url(parts[2]);
   const expectedHash = fromBase64Url(parts[3]);
-  const candidateHash = await deriveKey(password, salt);
+  const candidateHash = await deriveKey(password, salt, iterations);
 
   if (candidateHash.length !== expectedHash.length) {
     return false;
