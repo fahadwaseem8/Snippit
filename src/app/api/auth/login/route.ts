@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  createEmailConfirmationToken,
+  sendSignupConfirmation,
+} from "@/lib/auth/confirm";
+import {
   buildSessionCookieOptions,
   createSession,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/session";
-import { validateUserCredentials } from "@/lib/auth/users";
+import { setUserEmailConfirmation, validateUserCredentials } from "@/lib/auth/users";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,10 +36,29 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.is_email_verified) {
-      return NextResponse.json(
-        { error: "Please confirm your email before logging in" },
-        { status: 403 },
+      const token = createEmailConfirmationToken();
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
+
+      await setUserEmailConfirmation(user.id, token, expiresAt);
+      const { confirmationLink } = await sendSignupConfirmation(
+        user.email,
+        request.nextUrl.origin,
+        token,
       );
+
+      const payload: {
+        error: string;
+        confirmationLink?: string;
+      } = {
+        error:
+          "Please confirm your email before logging in. A new confirmation email has been sent.",
+      };
+
+      if (process.env.NODE_ENV !== "production") {
+        payload.confirmationLink = confirmationLink;
+      }
+
+      return NextResponse.json(payload, { status: 403 });
     }
 
     const { token, expiresAt } = await createSession({
