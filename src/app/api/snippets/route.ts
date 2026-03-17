@@ -118,7 +118,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      const { title, language, code, is_favorite } = await request.json();
+      const body = (await request.json()) as {
+        title?: unknown;
+        language?: unknown;
+        code?: unknown;
+        is_favorite?: unknown;
+      };
+      const title = typeof body.title === "string" ? body.title : "";
+      const language = typeof body.language === "string" ? body.language : "";
+      const code = typeof body.code === "string" ? body.code : "";
+      const isFavorite = Boolean(body.is_favorite);
 
       if (!title || !code) {
         return NextResponse.json(
@@ -140,7 +149,7 @@ export async function POST(request: NextRequest) {
           title,
           language || "plaintext",
           code,
-          is_favorite ? 1 : 0,
+          isFavorite ? 1 : 0,
           user.id,
           now,
           now,

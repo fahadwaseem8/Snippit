@@ -3,7 +3,12 @@ import { createUser, findUserByEmail } from "@/lib/auth/users";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json();
+    const body = (await request.json()) as {
+      email?: unknown;
+      password?: unknown;
+    };
+    const email = typeof body.email === "string" ? body.email : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
     if (!email || !password) {
       return NextResponse.json(

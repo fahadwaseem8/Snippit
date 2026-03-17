@@ -11,7 +11,8 @@ import { deleteSessionsForUser } from "@/lib/auth/session";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
+    const body = (await request.json()) as { email?: unknown };
+    const email = typeof body.email === "string" ? body.email : "";
 
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -58,7 +59,12 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { token, password } = await request.json();
+    const body = (await request.json()) as {
+      token?: unknown;
+      password?: unknown;
+    };
+    const token = body.token;
+    const password = body.password;
 
     if (!token || typeof token !== "string") {
       return NextResponse.json(

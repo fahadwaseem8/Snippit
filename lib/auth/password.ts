@@ -21,6 +21,7 @@ async function deriveKey(
   salt: Uint8Array,
 ): Promise<Uint8Array> {
   const encoder = new TextEncoder();
+  const normalizedSalt = new Uint8Array(salt);
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
@@ -33,7 +34,7 @@ async function deriveKey(
     {
       name: "PBKDF2",
       hash: "SHA-256",
-      salt,
+      salt: normalizedSalt,
       iterations: PBKDF2_ITERATIONS,
     },
     keyMaterial,

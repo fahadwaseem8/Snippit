@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { LOGO_URL, APP_NAME } from "@/lib/constants";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -57,7 +57,7 @@ export default function ResetPasswordPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string };
 
       if (!response.ok) {
         setError(data.error || "Failed to reset password");
@@ -229,5 +229,19 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen font-sans flex items-center justify-center p-6">
+          <p className="text-foreground/60 font-mono">Loading...</p>
+        </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

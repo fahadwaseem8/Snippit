@@ -43,23 +43,46 @@ export async function PATCH(
       }
 
       const { id } = await params;
-      const body = await request.json();
+      const body = (await request.json()) as {
+        title?: unknown;
+        language?: unknown;
+        code?: unknown;
+        is_favorite?: unknown;
+      };
       const { title, language, code, is_favorite } = body;
 
       const setClauses: string[] = [];
       const paramsList: Array<string | number | null> = [];
 
       if (title !== undefined) {
+        if (typeof title !== "string") {
+          return NextResponse.json(
+            { error: "title must be a string" },
+            { status: 400 },
+          );
+        }
         setClauses.push("title = ?");
         paramsList.push(title);
       }
 
       if (language !== undefined) {
+        if (typeof language !== "string") {
+          return NextResponse.json(
+            { error: "language must be a string" },
+            { status: 400 },
+          );
+        }
         setClauses.push("language = ?");
         paramsList.push(language);
       }
 
       if (code !== undefined) {
+        if (typeof code !== "string") {
+          return NextResponse.json(
+            { error: "code must be a string" },
+            { status: 400 },
+          );
+        }
         setClauses.push("code = ?");
         paramsList.push(code);
       }

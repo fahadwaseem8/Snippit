@@ -32,7 +32,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string };
 
       if (!response.ok) {
         setError(data.error || "Login failed");
@@ -63,7 +63,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email: resetEmail }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { error?: string };
 
       if (!response.ok) {
         setResetError(data.error || "Failed to send reset email");

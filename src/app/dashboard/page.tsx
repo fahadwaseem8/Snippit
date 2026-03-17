@@ -93,9 +93,11 @@ export default function DashboardPage() {
           return;
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as {
+          user?: { email?: string; id?: string };
+        };
 
-        if (!data.user) {
+        if (!data.user?.id) {
           router.push("/login");
           return;
         }
@@ -138,15 +140,19 @@ export default function DashboardPage() {
       }
 
       const response = await fetch(`/api/snippets?${params}`);
-      const data = await response.json();
+      const data = (await response.json()) as {
+        snippets?: Snippet[];
+        hasMore?: boolean;
+      };
 
       if (response.ok) {
+        const fetchedSnippets = data.snippets || [];
         if (append) {
-          setSnippets((prev) => [...prev, ...data.snippets]);
+          setSnippets((prev) => [...prev, ...fetchedSnippets]);
         } else {
-          setSnippets(data.snippets);
+          setSnippets(fetchedSnippets);
         }
-        setHasMore(data.hasMore);
+        setHasMore(Boolean(data.hasMore));
       }
     } catch (error) {
       console.error("Failed to fetch snippets:", error);
@@ -159,10 +165,12 @@ export default function DashboardPage() {
   const fetchFavorites = async () => {
     try {
       const response = await fetch("/api/snippets?favorites=true&limit=5");
-      const data = await response.json();
+      const data = (await response.json()) as {
+        snippets?: Snippet[];
+      };
 
       if (response.ok) {
-        setFavorites(data.snippets);
+        setFavorites(data.snippets || []);
       }
     } catch (error) {
       console.error("Failed to fetch favorites:", error);
