@@ -5,6 +5,9 @@ export interface UserRecord {
   id: string;
   email: string;
   password_hash: string;
+  is_email_verified: number;
+  email_confirm_token: string | null;
+  email_confirm_expires_at: string | null;
   reset_token: string | null;
   reset_token_expires_at: string | null;
   created_at: string;
@@ -57,8 +60,8 @@ export async function createUser(
   const passwordHash = await hashPassword(password);
 
   await d1Execute(
-    `INSERT INTO users (id, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    [id, normalizeEmail(email), passwordHash, now, now],
+    `INSERT INTO users (id, email, password_hash, is_email_verified, email_confirm_token, email_confirm_expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, normalizeEmail(email), passwordHash, 0, null, null, now, now],
   );
 
   const created = await d1Rows<UserRecord>(
@@ -85,6 +88,58 @@ export async function validateUserCredentials(
 
   const isValid = await verifyPassword(password, user.password_hash);
   return isValid ? user : null;
+}
+
+export async function setUserEmailConfirmation(
+  userId: string,
+  token: string,
+  expiresAt: string,
+): Promise<void> {
+  await ensureD1Schema();
+
+  await d1Execute(
+    `
+    UPDATE users
+    SET email_confirm_token = ?, email_confirm_expires_at = ?, updated_at = ?
+    WHERE id = ?
+    `,
+    [token, expiresAt, new Date().toISOString(), userId],
+  );
+}
+
+export async function findUserByEmailConfirmationToken(
+  token: string,
+): Promise<UserRecord | null> {
+  await ensureD1Schema();
+
+  const rows = await d1Rows<UserRecord>(
+    `
+    SELECT * FROM users
+    WHERE email_confirm_token = ?
+      AND email_confirm_expires_at > ?
+      AND is_email_verified = 0
+    LIMIT 1
+    `,
+    [token, new Date().toISOString()],
+  );
+
+  return rows[0] || null;
+}
+
+export async function markUserEmailAsVerified(userId: string): Promise<void> {
+  await ensureD1Schema();
+
+  await d1Execute(
+    `
+    UPDATE users
+    SET is_email_verified = 1,
+        email_confirm_token = NULL,
+        email_confirm_expires_at = NULL,
+        updated_at = ?
+    WHERE id = ?
+    `,
+    [new Date().toISOString(), userId],
+  );
 }
 
 export async function setUserResetToken(

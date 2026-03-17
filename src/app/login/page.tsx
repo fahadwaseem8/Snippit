@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LOGO_URL, APP_NAME } from "@/lib/constants";
@@ -16,7 +16,33 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetError, setResetError] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState("");
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const verified = params.get("verified");
+
+    if (verified === "1") {
+      setVerificationStatus("Your email is confirmed. You can now log in.");
+      return;
+    }
+
+    if (verified === "invalid") {
+      setVerificationStatus("Confirmation link is invalid or expired.");
+      return;
+    }
+
+    if (verified === "error") {
+      setVerificationStatus(
+        "We could not confirm your email right now. Please try again.",
+      );
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,6 +155,13 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="grid gap-5">
+              {verificationStatus && (
+                <div className="px-4 py-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300 font-mono">
+                  <span className="text-blue-200">Info:</span>{" "}
+                  {verificationStatus}
+                </div>
+              )}
+
               {error && (
                 <div className="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-400 font-mono">
                   <span className="text-red-300">Error:</span> {error}

@@ -1,4 +1,8 @@
-import { isSmtpConfigured, sendEmail } from "@/lib/email";
+import {
+  isSmtpConfigured,
+  renderPublicEmailTemplate,
+  sendEmail,
+} from "@/lib/email";
 
 function buildResetUrl(origin: string, token: string): string {
   const url = new URL("/reset-password", origin);
@@ -13,32 +17,20 @@ function fallbackResetPasswordHtml(resetLink: string): string {
   ].join("");
 }
 
-async function loadResetPasswordTemplate(origin: string): Promise<string> {
-  const templateUrl = new URL("/email_templates/reset_password.html", origin);
-  const response = await fetch(templateUrl.toString(), {
-    method: "GET",
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to load reset password template (status: ${response.status})`,
-    );
-  }
-
-  return response.text();
-}
-
 async function buildResetPasswordHtml(
   resetLink: string,
   siteUrl: string,
   origin: string,
 ): Promise<string> {
   try {
-    const template = await loadResetPasswordTemplate(origin);
-    return template
-      .replaceAll("{{ .ConfirmationURL }}", resetLink)
-      .replaceAll("{{ .SiteURL }}", siteUrl);
+    return await renderPublicEmailTemplate({
+      origin,
+      fileName: "reset_password.html",
+      replacements: {
+        "{{ .ConfirmationURL }}": resetLink,
+        "{{ .SiteURL }}": siteUrl,
+      },
+    });
   } catch (error) {
     console.error("Failed to load reset email template:", error);
     return fallbackResetPasswordHtml(resetLink);

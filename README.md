@@ -147,6 +147,7 @@ Authentication:
 
 - `POST /api/auth/login`
 - `POST /api/auth/register`
+- `GET /api/auth/confirm?token=...`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 - `POST /api/auth/reset-password` (request reset link)

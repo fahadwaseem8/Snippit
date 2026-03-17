@@ -18,6 +18,10 @@ interface D1PreparedStatement {
   run(): Promise<D1QueryResult>;
 }
 
+interface D1ColumnInfo {
+  name: string;
+}
+
 interface D1Binding {
   prepare(query: string): D1PreparedStatement;
 }
@@ -133,4 +137,25 @@ async function initializeSchema(): Promise<void> {
   for (const sql of statements) {
     await d1Execute(sql);
   }
+
+  const userColumns = await d1Rows<D1ColumnInfo>(`PRAGMA table_info(users)`);
+  const columnNames = new Set(userColumns.map((column) => column.name));
+
+  if (!columnNames.has("is_email_verified")) {
+    await d1Execute(
+      `ALTER TABLE users ADD COLUMN is_email_verified INTEGER NOT NULL DEFAULT 0`,
+    );
+  }
+
+  if (!columnNames.has("email_confirm_token")) {
+    await d1Execute(`ALTER TABLE users ADD COLUMN email_confirm_token TEXT`);
+  }
+
+  if (!columnNames.has("email_confirm_expires_at")) {
+    await d1Execute(`ALTER TABLE users ADD COLUMN email_confirm_expires_at TEXT`);
+  }
+
+  await d1Execute(
+    `CREATE INDEX IF NOT EXISTS idx_users_email_confirm_token ON users(email_confirm_token)`,
+  );
 }

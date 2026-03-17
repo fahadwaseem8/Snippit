@@ -31,6 +31,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!user.is_email_verified) {
+      return NextResponse.json(
+        { error: "Please confirm your email before logging in" },
+        { status: 403 },
+      );
+    }
+
     const { token, expiresAt } = await createSession({
       id: user.id,
       email: user.email,

@@ -16,6 +16,14 @@ interface SendEmailInput {
   html: string;
 }
 
+interface RenderTemplateInput {
+  origin: string;
+  fileName: string;
+  replacements: Record<string, string>;
+}
+
+const templateCache = new Map<string, string>();
+
 function getSmtpConfig(): SmtpConfig | null {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT;
@@ -67,4 +75,45 @@ export async function sendEmail(input: SendEmailInput): Promise<boolean> {
   });
 
   return true;
+}
+
+async function loadPublicTemplate(
+  origin: string,
+  fileName: string,
+): Promise<string> {
+  const cacheKey = `${origin}::${fileName}`;
+  const cached = templateCache.get(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const templateUrl = new URL(`/email_templates/${fileName}`, origin);
+  const response = await fetch(templateUrl.toString(), {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load email template ${fileName} (status: ${response.status})`,
+    );
+  }
+
+  const template = await response.text();
+  templateCache.set(cacheKey, template);
+  return template;
+}
+
+export async function renderPublicEmailTemplate(
+  input: RenderTemplateInput,
+): Promise<string> {
+  const template = await loadPublicTemplate(input.origin, input.fileName);
+
+  let rendered = template;
+  for (const [placeholder, value] of Object.entries(input.replacements)) {
+    rendered = rendered.replaceAll(placeholder, value);
+  }
+
+  return rendered;
 }

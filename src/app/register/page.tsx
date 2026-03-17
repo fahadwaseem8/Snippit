@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -16,6 +17,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
     setSuccess(false);
+    setSuccessMessage("");
     setLoading(true);
 
     try {
@@ -27,7 +29,10 @@ export default function RegisterPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as {
+        error?: string;
+        message?: string;
+      };
 
       if (!response.ok) {
         setError(data.error || "Registration failed");
@@ -37,6 +42,10 @@ export default function RegisterPage() {
 
       // Show success message and clear form
       setSuccess(true);
+      setSuccessMessage(
+        data.message ||
+          "Check your inbox and confirm your email before logging in.",
+      );
       setEmail("");
       setPassword("");
       setLoading(false);
@@ -105,13 +114,9 @@ export default function RegisterPage() {
                     successful!
                   </p>
                   <p className="text-foreground/50 text-xs">
-                    {`// `}You can now{" "}
-                    <Link
-                      href="/login"
-                      className="text-green-400 hover:underline"
-                    >
-                      login here
-                    </Link>
+                    {`// `}
+                    {successMessage ||
+                      "Check your inbox and confirm your email before logging in."}
                   </p>
                 </div>
               )}
