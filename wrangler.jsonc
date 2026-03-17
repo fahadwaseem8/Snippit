@@ -34,7 +34,13 @@
 	],
 	"observability": {
 		"enabled": true
-	}
+	},
+	"d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "snippit",
+      "database_id": "f0cc32c1-bca0-4656-ad99-7d61528bc9ec"
+    }
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
