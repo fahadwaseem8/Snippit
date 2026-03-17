@@ -14,6 +14,78 @@ interface LogData {
   response_time: number;
 }
 
+interface APILoggingOptions {
+  sensitiveFields?: string[];
+}
+
+const DEFAULT_SENSITIVE_FIELDS = [
+  "password",
+  "newpassword",
+  "confirmpassword",
+  "token",
+  "reset_token",
+  "email_confirm_token",
+  "session",
+  "sessiontoken",
+  "authorization",
+  "cookie",
+  "password_hash",
+  "resetlink",
+  "confirmationlink",
+];
+
+function isSensitiveKey(key: string, sensitiveFields: Set<string>): boolean {
+  return sensitiveFields.has(key.toLowerCase());
+}
+
+function sanitizeUnknown(
+  value: unknown,
+  sensitiveFields: Set<string>,
+): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeUnknown(item, sensitiveFields));
+  }
+
+  if (typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+
+    for (const [key, item] of Object.entries(source)) {
+      if (isSensitiveKey(key, sensitiveFields)) {
+        sanitized[key] = "[REDACTED]";
+      } else {
+        sanitized[key] = sanitizeUnknown(item, sensitiveFields);
+      }
+    }
+
+    return sanitized;
+  }
+
+  return value;
+}
+
+function sanitizeQueryParams(
+  queryParams: Record<string, string | string[]>,
+  sensitiveFields: Set<string>,
+): Record<string, string | string[]> {
+  const sanitized: Record<string, string | string[]> = {};
+
+  for (const [key, value] of Object.entries(queryParams)) {
+    if (isSensitiveKey(key, sensitiveFields)) {
+      sanitized[key] = "[REDACTED]";
+      continue;
+    }
+
+    sanitized[key] = value;
+  }
+
+  return sanitized;
+}
+
 export async function logRequest(data: LogData) {
   try {
     await ensureD1Schema();
@@ -106,8 +178,13 @@ export function extractQueryParams(
 export async function withAPILogging(
   request: NextRequest,
   handler: () => Promise<NextResponse>,
+  options: APILoggingOptions = {},
 ): Promise<NextResponse> {
   const startTime = Date.now();
+  const sensitiveFields = new Set<string>([
+    ...DEFAULT_SENSITIVE_FIELDS,
+    ...(options.sensitiveFields || []),
+  ]);
 
   // Extract request data
   const ip = getClientIP(request);
@@ -115,7 +192,10 @@ export async function withAPILogging(
   const method = request.method;
   const url = request.nextUrl.pathname;
   const headers = extractHeaders(request);
-  const queryParams = extractQueryParams(request);
+  const queryParams = sanitizeQueryParams(
+    extractQueryParams(request),
+    sensitiveFields,
+  );
 
   let body: unknown;
   try {
@@ -126,6 +206,8 @@ export async function withAPILogging(
   } catch {
     body = null;
   }
+
+  const sanitizedBody = sanitizeUnknown(body, sensitiveFields);
 
   // Execute the actual handler
   let response: NextResponse;
@@ -153,6 +235,8 @@ export async function withAPILogging(
     response = NextResponse.json(responseBody, { status: responseStatus });
   }
 
+  const sanitizedResponseBody = sanitizeUnknown(responseBody, sensitiveFields);
+
   const responseTime = Date.now() - startTime;
 
   // Await log insert so serverless runtimes do not drop writes after response return.
@@ -163,8 +247,8 @@ export async function withAPILogging(
     url,
     headers,
     query_params: queryParams,
-    body,
-    response_body: responseBody,
+    body: sanitizedBody,
+    response_body: sanitizedResponseBody,
     response_status: responseStatus,
     response_time: responseTime,
   });

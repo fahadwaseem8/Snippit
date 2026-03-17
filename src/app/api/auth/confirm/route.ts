@@ -3,30 +3,39 @@ import {
   findUserByEmailConfirmationToken,
   markUserEmailAsVerified,
 } from "@/lib/auth/users";
+import { withAPILogging } from "@/lib/api-logger";
 
 export async function GET(request: NextRequest) {
-  try {
-    const token = request.nextUrl.searchParams.get("token") || "";
+  return withAPILogging(request, async () => {
+    try {
+      const token = request.nextUrl.searchParams.get("token") || "";
 
-    if (!token) {
-      const redirectUrl = new URL("/login?verified=invalid", request.nextUrl.origin);
+      if (!token) {
+        const redirectUrl = new URL(
+          "/login?verified=invalid",
+          request.nextUrl.origin,
+        );
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      const user = await findUserByEmailConfirmationToken(token);
+
+      if (!user) {
+        const redirectUrl = new URL(
+          "/login?verified=invalid",
+          request.nextUrl.origin,
+        );
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      await markUserEmailAsVerified(user.id);
+
+      const redirectUrl = new URL("/login?verified=1", request.nextUrl.origin);
+      return NextResponse.redirect(redirectUrl);
+    } catch (error) {
+      console.error("Confirm signup error:", error);
+      const redirectUrl = new URL("/login?verified=error", request.nextUrl.origin);
       return NextResponse.redirect(redirectUrl);
     }
-
-    const user = await findUserByEmailConfirmationToken(token);
-
-    if (!user) {
-      const redirectUrl = new URL("/login?verified=invalid", request.nextUrl.origin);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    await markUserEmailAsVerified(user.id);
-
-    const redirectUrl = new URL("/login?verified=1", request.nextUrl.origin);
-    return NextResponse.redirect(redirectUrl);
-  } catch (error) {
-    console.error("Confirm signup error:", error);
-    const redirectUrl = new URL("/login?verified=error", request.nextUrl.origin);
-    return NextResponse.redirect(redirectUrl);
-  }
+  });
 }
