@@ -27,8 +27,14 @@ interface Snippet {
 interface SnippetModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (snippet: { title: string; language: string; code: string; is_favorite: boolean }) => void;
+  onSave: (snippet: {
+    title: string;
+    language: string;
+    code: string;
+    is_favorite: boolean;
+  }) => Promise<void>;
   editingSnippet?: Snippet | null;
+  isSaving?: boolean;
 }
 
 const LANGUAGES = [
@@ -77,7 +83,13 @@ const getLanguageExtension = (lang: string) => {
   }
 };
 
-export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }: SnippetModalProps) {
+export default function SnippetModal({
+  isOpen,
+  onClose,
+  onSave,
+  editingSnippet,
+  isSaving = false,
+}: SnippetModalProps) {
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [code, setCode] = useState("");
@@ -97,9 +109,12 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
     }
   }, [editingSnippet, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ title, language, code, is_favorite: isFavorite });
+    if (isSaving) {
+      return;
+    }
+    await onSave({ title, language, code, is_favorite: isFavorite });
   };
 
   if (!isOpen) return null;
@@ -121,6 +136,7 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
           </div>
           <button
             onClick={onClose}
+            disabled={isSaving}
             className="text-foreground/60 hover:text-foreground transition"
           >
             ✕
@@ -140,6 +156,7 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
               onChange={(e) => setTitle(e.target.value)}
               placeholder="My awesome snippet"
               required
+              disabled={isSaving}
               className="w-full px-4 py-3 bg-black/40 border border-foreground/20 rounded-lg focus:border-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/10 transition font-mono text-sm"
             />
           </div>
@@ -152,6 +169,7 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
               id="language"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
+              disabled={isSaving}
               className="w-full px-4 py-3 bg-black/40 border border-foreground/20 rounded-lg focus:border-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/10 transition font-mono text-sm"
             >
               {LANGUAGES.map((lang) => (
@@ -174,6 +192,7 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
                 extensions={[getLanguageExtension(language)]}
                 onChange={(value) => setCode(value)}
                 placeholder="// Your code here..."
+                editable={!isSaving}
                 basicSetup={{
                   lineNumbers: true,
                   highlightActiveLineGutter: true,
@@ -206,6 +225,7 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
               id="favorite"
               checked={isFavorite}
               onChange={(e) => setIsFavorite(e.target.checked)}
+              disabled={isSaving}
               className="w-4 h-4"
             />
             <label htmlFor="favorite" className="text-sm font-mono text-foreground/70">
@@ -216,14 +236,26 @@ export default function SnippetModal({ isOpen, onClose, onSave, editingSnippet }
           <div className="flex gap-3 pt-4">
             <button
               type="submit"
-              className="flex-1 bg-foreground text-background px-4 py-3 rounded-lg font-medium hover:opacity-90 transition font-mono"
+              disabled={isSaving}
+              className="flex-1 bg-foreground text-background px-4 py-3 rounded-lg font-medium hover:opacity-90 transition font-mono disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="text-green-400">→</span> {editingSnippet ? "snippet.update()" : "snippet.create()"}
+              {isSaving ? (
+                <>
+                  <span className="text-yellow-400">⏳</span>{" "}
+                  {editingSnippet ? "snippet.update()..." : "snippet.create()..."}
+                </>
+              ) : (
+                <>
+                  <span className="text-green-400">→</span>{" "}
+                  {editingSnippet ? "snippet.update()" : "snippet.create()"}
+                </>
+              )}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 border border-foreground/20 rounded-lg font-medium hover:bg-foreground/5 transition font-mono"
+              disabled={isSaving}
+              className="px-6 py-3 border border-foreground/20 rounded-lg font-medium hover:bg-foreground/5 transition font-mono disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

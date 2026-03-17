@@ -4,20 +4,24 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LOGO_URL, APP_NAME } from "@/lib/constants";
+import { useSingleFlight } from "@/lib/hooks/useSingleFlight";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
-  const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetError, setResetError] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("");
+  const loginFlight = useSingleFlight();
+  const resetFlight = useSingleFlight();
   const router = useRouter();
+
+  const loading = loginFlight.isRunning;
+  const resetLoading = resetFlight.isRunning;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -46,67 +50,65 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    await loginFlight.run(async () => {
+      setError("");
 
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        });
 
-      const data = (await response.json()) as { error?: string };
+        const data = (await response.json()) as { error?: string };
 
-      if (!response.ok) {
-        setError(data.error || "Login failed");
-        setLoading(false);
-        return;
+        if (!response.ok) {
+          setError(data.error || "Login failed");
+          return;
+        }
+
+        // Redirect to dashboard on success
+        router.push("/dashboard");
+        router.refresh();
+      } catch {
+        setError("An unexpected error occurred");
       }
-
-      // Redirect to dashboard on success
-      router.push("/dashboard");
-      router.refresh();
-    } catch {
-      setError("An unexpected error occurred");
-      setLoading(false);
-    }
+    });
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setResetError("");
-    setResetLoading(true);
+    await resetFlight.run(async () => {
+      setResetError("");
 
-    try {
-      const response = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: resetEmail }),
-      });
+      try {
+        const response = await fetch("/api/auth/reset-password", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email: resetEmail }),
+        });
 
-      const data = (await response.json()) as { error?: string };
+        const data = (await response.json()) as { error?: string };
 
-      if (!response.ok) {
-        setResetError(data.error || "Failed to send reset email");
-        setResetLoading(false);
-        return;
+        if (!response.ok) {
+          setResetError(data.error || "Failed to send reset email");
+          return;
+        }
+
+        setResetSuccess(true);
+        setTimeout(() => {
+          setShowResetModal(false);
+          setResetSuccess(false);
+          setResetEmail("");
+        }, 3000);
+      } catch {
+        setResetError("An unexpected error occurred");
       }
-
-      setResetSuccess(true);
-      setTimeout(() => {
-        setShowResetModal(false);
-        setResetSuccess(false);
-        setResetEmail("");
-      }, 3000);
-    } catch {
-      setResetError("An unexpected error occurred");
-      setResetLoading(false);
-    }
+    });
   };
 
   return (

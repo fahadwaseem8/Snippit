@@ -5,16 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { LOGO_URL, APP_NAME } from "@/lib/constants";
+import { useSingleFlight } from "@/lib/hooks/useSingleFlight";
 
 function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const resetPasswordFlight = useSingleFlight();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+
+  const loading = resetPasswordFlight.isRunning;
 
   useEffect(() => {
     if (!token) {
@@ -24,55 +27,51 @@ function ResetPasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    await resetPasswordFlight.run(async () => {
+      setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      setLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      setLoading(false);
-      return;
-    }
-
-    if (!token) {
-      setError("Invalid or expired reset link. Please request a new one.");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/auth/reset-password", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token,
-          password,
-        }),
-      });
-
-      const data = (await response.json()) as { error?: string };
-
-      if (!response.ok) {
-        setError(data.error || "Failed to reset password");
-        setLoading(false);
+      if (password !== confirmPassword) {
+        setError("Passwords do not match");
         return;
       }
 
-      setSuccess(true);
-      setTimeout(() => {
-        router.push("/login");
-      }, 2000);
-    } catch {
-      setError("An unexpected error occurred");
-      setLoading(false);
-    }
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters");
+        return;
+      }
+
+      if (!token) {
+        setError("Invalid or expired reset link. Please request a new one.");
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/auth/reset-password", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token,
+            password,
+          }),
+        });
+
+        const data = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          setError(data.error || "Failed to reset password");
+          return;
+        }
+
+        setSuccess(true);
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      } catch {
+        setError("An unexpected error occurred");
+      }
+    });
   };
 
   if (success) {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import SnippetCard from "../components/SnippetCard";
 import SnippetModal from "../components/SnippetModal";
 import { LOGO_URL, APP_NAME } from "@/lib/constants";
+import { useKeyedSingleFlight, useSingleFlight } from "@/lib/hooks/useSingleFlight";
 
 interface Snippet {
   id: string;
@@ -67,7 +68,6 @@ const LANGUAGES = [
 export default function DashboardPage() {
   const [user, setUser] = useState<{ email: string; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [favorites, setFavorites] = useState<Snippet[]>([]);
   const [page, setPage] = useState(1);
@@ -78,6 +78,10 @@ export default function DashboardPage() {
   const [selectedLanguage, setSelectedLanguage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSnippet, setEditingSnippet] = useState<Snippet | null>(null);
+  const logoutFlight = useSingleFlight();
+  const saveSnippetFlight = useSingleFlight();
+  const deleteSnippetFlight = useKeyedSingleFlight<string>();
+  const favoriteSnippetFlight = useKeyedSingleFlight<string>();
   const router = useRouter();
 
   useEffect(() => {
@@ -209,9 +213,7 @@ export default function DashboardPage() {
 
   // Handle logout
   const handleLogout = async () => {
-    setLoggingOut(true);
-
-    try {
+    await logoutFlight.run(async () => {
       const response = await fetch("/api/auth/logout", {
         method: "POST",
       });
@@ -219,12 +221,8 @@ export default function DashboardPage() {
       if (response.ok) {
         router.push("/");
         router.refresh();
-      } else {
-        setLoggingOut(false);
       }
-    } catch {
-      setLoggingOut(false);
-    }
+    });
   };
 
   // Handle create/edit snippet
@@ -234,82 +232,93 @@ export default function DashboardPage() {
     code: string;
     is_favorite: boolean;
   }) => {
-    try {
-      if (editingSnippet) {
-        // Update existing snippet
-        const response = await fetch(`/api/snippets/${editingSnippet.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(snippetData),
-        });
+    await saveSnippetFlight.run(async () => {
+      try {
+        if (editingSnippet) {
+          // Update existing snippet
+          const response = await fetch(`/api/snippets/${editingSnippet.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(snippetData),
+          });
 
-        if (response.ok) {
-          setIsModalOpen(false);
-          setEditingSnippet(null);
-          setPage(1);
-          fetchSnippets(1, search, selectedLanguage);
-          fetchFavorites();
-        }
-      } else {
-        // Create new snippet
-        const response = await fetch("/api/snippets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(snippetData),
-        });
+          if (response.ok) {
+            setIsModalOpen(false);
+            setEditingSnippet(null);
+            setPage(1);
+            await Promise.all([
+              fetchSnippets(1, search, selectedLanguage),
+              fetchFavorites(),
+            ]);
+          }
+        } else {
+          // Create new snippet
+          const response = await fetch("/api/snippets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(snippetData),
+          });
 
-        if (response.ok) {
-          setIsModalOpen(false);
-          setPage(1);
-          fetchSnippets(1, search, selectedLanguage);
-          fetchFavorites();
+          if (response.ok) {
+            setIsModalOpen(false);
+            setPage(1);
+            await Promise.all([
+              fetchSnippets(1, search, selectedLanguage),
+              fetchFavorites(),
+            ]);
+          }
         }
+      } catch (error) {
+        console.error("Failed to save snippet:", error);
       }
-    } catch (error) {
-      console.error("Failed to save snippet:", error);
-    }
+    });
   };
 
   // Handle delete
   const handleDelete = async (id: string) => {
-    try {
-      const response = await fetch(`/api/snippets/${id}`, {
-        method: "DELETE",
-      });
+    await deleteSnippetFlight.run(id, async () => {
+      try {
+        const response = await fetch(`/api/snippets/${id}`, {
+          method: "DELETE",
+        });
 
-      if (response.ok) {
-        setSnippets((prev) => prev.filter((s) => s.id !== id));
-        setFavorites((prev) => prev.filter((s) => s.id !== id));
+        if (response.ok) {
+          setSnippets((prev) => prev.filter((s) => s.id !== id));
+          setFavorites((prev) => prev.filter((s) => s.id !== id));
+        }
+      } catch (error) {
+        console.error("Failed to delete snippet:", error);
       }
-    } catch (error) {
-      console.error("Failed to delete snippet:", error);
-    }
+    });
   };
 
   // Handle toggle favorite
   const handleToggleFavorite = async (id: string, isFavorite: boolean) => {
-    try {
-      const response = await fetch(`/api/snippets/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_favorite: isFavorite }),
-      });
+    await favoriteSnippetFlight.run(id, async () => {
+      try {
+        const response = await fetch(`/api/snippets/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_favorite: isFavorite }),
+        });
 
-      if (response.ok) {
-        setSnippets((prev) =>
-          prev.map((s) =>
-            s.id === id ? { ...s, is_favorite: isFavorite } : s,
-          ),
-        );
-        fetchFavorites();
+        if (response.ok) {
+          setSnippets((prev) =>
+            prev.map((s) =>
+              s.id === id ? { ...s, is_favorite: isFavorite } : s,
+            ),
+          );
+          await fetchFavorites();
+        }
+      } catch (error) {
+        console.error("Failed to toggle favorite:", error);
       }
-    } catch (error) {
-      console.error("Failed to toggle favorite:", error);
-    }
+    });
   };
 
   // Handle edit
   const handleEdit = (snippet: Snippet) => {
+    if (isModalOpen || saveSnippetFlight.isRunning) return;
     setEditingSnippet(snippet);
     setIsModalOpen(true);
   };
@@ -346,10 +355,10 @@ export default function DashboardPage() {
             </span>
             <button
               onClick={handleLogout}
-              disabled={loggingOut}
+              disabled={logoutFlight.isRunning}
               className="text-sm px-4 py-2 border border-foreground/20 rounded-lg hover:bg-foreground/5 transition font-mono disabled:opacity-50"
             >
-              {loggingOut ? "⏳ Logout..." : "← Logout"}
+              {logoutFlight.isRunning ? "⏳ Logout..." : "← Logout"}
             </button>
           </div>
         </nav>
@@ -404,6 +413,11 @@ export default function DashboardPage() {
                   onDelete={handleDelete}
                   onToggleFavorite={handleToggleFavorite}
                   onEdit={handleEdit}
+                  isDeleting={deleteSnippetFlight.isRunning(snippet.id)}
+                  isTogglingFavorite={favoriteSnippetFlight.isRunning(
+                    snippet.id,
+                  )}
+                  isEditing={isModalOpen && editingSnippet?.id === snippet.id}
                 />
               ))}
             </div>
@@ -452,6 +466,11 @@ export default function DashboardPage() {
                     onDelete={handleDelete}
                     onToggleFavorite={handleToggleFavorite}
                     onEdit={handleEdit}
+                    isDeleting={deleteSnippetFlight.isRunning(snippet.id)}
+                    isTogglingFavorite={favoriteSnippetFlight.isRunning(
+                      snippet.id,
+                    )}
+                    isEditing={isModalOpen && editingSnippet?.id === snippet.id}
                   />
                 ))}
             </div>
@@ -476,11 +495,13 @@ export default function DashboardPage() {
       <SnippetModal
         isOpen={isModalOpen}
         onClose={() => {
+          if (saveSnippetFlight.isRunning) return;
           setIsModalOpen(false);
           setEditingSnippet(null);
         }}
         onSave={handleSaveSnippet}
         editingSnippet={editingSnippet}
+        isSaving={saveSnippetFlight.isRunning}
       />
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { LOGO_URL, APP_NAME } from "@/lib/constants";
+import { useSingleFlight } from "@/lib/hooks/useSingleFlight";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -10,49 +11,49 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const registerFlight = useSingleFlight();
+
+  const loading = registerFlight.isRunning;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccess(false);
-    setSuccessMessage("");
-    setLoading(true);
+    await registerFlight.run(async () => {
+      setError("");
+      setSuccess(false);
+      setSuccessMessage("");
 
-    try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      try {
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        });
 
-      const data = (await response.json()) as {
-        error?: string;
-        message?: string;
-      };
+        const data = (await response.json()) as {
+          error?: string;
+          message?: string;
+        };
 
-      if (!response.ok) {
-        setError(data.error || "Registration failed");
-        setLoading(false);
-        return;
+        if (!response.ok) {
+          setError(data.error || "Registration failed");
+          return;
+        }
+
+        // Show success message and clear form
+        setSuccess(true);
+        setSuccessMessage(
+          data.message ||
+            "Check your inbox and confirm your email before logging in.",
+        );
+        setEmail("");
+        setPassword("");
+      } catch {
+        setError("An unexpected error occurred");
       }
-
-      // Show success message and clear form
-      setSuccess(true);
-      setSuccessMessage(
-        data.message ||
-          "Check your inbox and confirm your email before logging in.",
-      );
-      setEmail("");
-      setPassword("");
-      setLoading(false);
-    } catch {
-      setError("An unexpected error occurred");
-      setLoading(false);
-    }
+    });
   };
 
   return (

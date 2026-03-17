@@ -69,6 +69,9 @@ interface SnippetCardProps {
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string, isFavorite: boolean) => void;
   onEdit: (snippet: Snippet) => void;
+  isDeleting?: boolean;
+  isTogglingFavorite?: boolean;
+  isEditing?: boolean;
 }
 
 export default function SnippetCard({
@@ -76,6 +79,9 @@ export default function SnippetCard({
   onDelete,
   onToggleFavorite,
   onEdit,
+  isDeleting = false,
+  isTogglingFavorite = false,
+  isEditing = false,
 }: SnippetCardProps) {
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -106,10 +112,11 @@ export default function SnippetCard({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <button
             onClick={() => onToggleFavorite(snippet.id, !snippet.is_favorite)}
-            className="text-xl hover:scale-110 transition-transform"
+            disabled={isDeleting || isTogglingFavorite || isEditing}
+            className="text-xl hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             title={snippet.is_favorite ? "Remove from favorites" : "Add to favorites"}
           >
-            {snippet.is_favorite ? "⭐" : "☆"}
+            {isTogglingFavorite ? "⏳" : snippet.is_favorite ? "⭐" : "☆"}
           </button>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold truncate">{snippet.title}</h3>
@@ -123,15 +130,17 @@ export default function SnippetCard({
         <div className="hidden md:flex items-center gap-2">
           <button
             onClick={handleCopy}
+            disabled={isDeleting || isTogglingFavorite || isEditing}
             className="px-3 py-1.5 text-xs font-mono border border-foreground/20 rounded hover:bg-foreground/5 transition whitespace-nowrap"
           >
             {copied ? "✓ Copied" : "📋 Copy"}
           </button>
           <button
             onClick={() => onEdit(snippet)}
-            className="px-3 py-1.5 text-xs font-mono border border-foreground/20 rounded hover:bg-foreground/5 transition whitespace-nowrap"
+            disabled={isDeleting || isTogglingFavorite || isEditing}
+            className="px-3 py-1.5 text-xs font-mono border border-foreground/20 rounded hover:bg-foreground/5 transition whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ✏️ Edit
+            {isEditing ? "⏳ Edit..." : "✏️ Edit"}
           </button>
           <button
             onClick={() => {
@@ -139,9 +148,10 @@ export default function SnippetCard({
                 onDelete(snippet.id);
               }
             }}
-            className="px-3 py-1.5 text-xs font-mono border border-red-500/30 text-red-400 rounded hover:bg-red-500/10 transition whitespace-nowrap"
+            disabled={isDeleting || isTogglingFavorite || isEditing}
+            className="px-3 py-1.5 text-xs font-mono border border-red-500/30 text-red-400 rounded hover:bg-red-500/10 transition whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            🗑️ Delete
+            {isDeleting ? "⏳ Delete..." : "🗑️ Delete"}
           </button>
         </div>
 
@@ -149,7 +159,8 @@ export default function SnippetCard({
         <div className="md:hidden relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="px-3 py-1.5 text-xs font-mono border border-foreground/20 rounded hover:bg-foreground/5 transition"
+            disabled={isDeleting || isTogglingFavorite || isEditing}
+            className="px-3 py-1.5 text-xs font-mono border border-foreground/20 rounded hover:bg-foreground/5 transition disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="More actions"
           >
             ⋮
@@ -167,6 +178,7 @@ export default function SnippetCard({
               <div className="absolute right-0 top-full mt-1 z-20 bg-black/90 border border-foreground/20 rounded-lg shadow-xl overflow-hidden min-w-[140px]">
                 <button
                   onClick={handleCopy}
+                  disabled={isDeleting || isTogglingFavorite || isEditing}
                   className="w-full px-4 py-2.5 text-left text-sm font-mono hover:bg-foreground/5 transition flex items-center gap-2"
                 >
                   <span>📋</span> {copied ? "Copied!" : "Copy"}
@@ -176,9 +188,11 @@ export default function SnippetCard({
                     onEdit(snippet);
                     setShowMenu(false);
                   }}
+                  disabled={isDeleting || isTogglingFavorite || isEditing}
                   className="w-full px-4 py-2.5 text-left text-sm font-mono hover:bg-foreground/5 transition border-t border-foreground/10 flex items-center gap-2"
                 >
-                  <span>✏️</span> Edit
+                  <span>{isEditing ? "⏳" : "✏️"}</span>{" "}
+                  {isEditing ? "Editing..." : "Edit"}
                 </button>
                 <button
                   onClick={() => {
@@ -187,9 +201,11 @@ export default function SnippetCard({
                       onDelete(snippet.id);
                     }
                   }}
+                  disabled={isDeleting || isTogglingFavorite || isEditing}
                   className="w-full px-4 py-2.5 text-left text-sm font-mono text-red-400 hover:bg-red-500/10 transition border-t border-foreground/10 flex items-center gap-2"
                 >
-                  <span>🗑️</span> Delete
+                  <span>{isDeleting ? "⏳" : "🗑️"}</span>{" "}
+                  {isDeleting ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </>
