@@ -155,8 +155,8 @@ export async function withAPILogging(
 
   const responseTime = Date.now() - startTime;
 
-  // Log asynchronously (don't wait)
-  logRequest({
+  // Await log insert so serverless runtimes do not drop writes after response return.
+  await logRequest({
     ip_address: ip,
     user_agent: userAgent,
     method,
@@ -167,7 +167,7 @@ export async function withAPILogging(
     response_body: responseBody,
     response_status: responseStatus,
     response_time: responseTime,
-  }).catch((err) => console.error("Async log error:", err));
+  });
 
   return response;
 }
