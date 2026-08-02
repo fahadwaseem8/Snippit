@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: "A lightweight home for your code snippets. Save, search, and copy in one click.",
 };
 
+import SupabaseListener from "./components/SupabaseListener";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,6 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <SupabaseListener />
         {children}
       </body>
     </html>
