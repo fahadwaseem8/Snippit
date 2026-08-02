@@ -2,21 +2,25 @@
 
 import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function SupabaseListener() {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const supabase = createClient();
     
-    // The createClient() call automatically parses #access_token fragments
-    // and sets the appropriate cookies. The listener below refreshes the 
-    // page so Server Components can see the newly set cookie.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+      if (event === "SIGNED_IN") {
+        if (pathname === "/" || pathname === "/login" || pathname === "/register") {
+          router.push("/dashboard");
+        } else {
+          router.refresh();
+        }
+      } else if (event === "SIGNED_OUT") {
         router.refresh();
       }
     });
@@ -24,7 +28,7 @@ export default function SupabaseListener() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, pathname]);
 
   return null;
 }
