@@ -4,29 +4,30 @@ Your lightweight home for code snippets. Save, search, and copy with ease.
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue?style=flat-square&logo=react)](https://react.dev/)
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?style=flat-square&logo=cloudflare)](https://workers.cloudflare.com/)
-[![Cloudflare D1](https://img.shields.io/badge/Cloudflare-D1-f38020?style=flat-square&logo=cloudflare)](https://developers.cloudflare.com/d1/)
+[![Vercel](https://img.shields.io/badge/Vercel-Deploy-black?style=flat-square&logo=vercel)](https://vercel.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-3ecf8e?style=flat-square&logo=supabase)](https://supabase.com/)
 
-Snippit is a modern code snippet manager built with Next.js App Router and deployed on Cloudflare Workers using OpenNext. Data is stored in Cloudflare D1, with custom auth/session handling backed by D1 tables.
+Snippit is a modern code snippet manager built with Next.js App Router and deployed on Vercel. Data is securely stored in a Supabase PostgreSQL database, utilizing built-in Supabase Auth (GoTrue) for session management and user authentication.
 
 ## Features
 
 - Save, edit, delete, and favorite snippets
 - Search snippets by title/code and filter by language
 - CodeMirror 6 editor with syntax highlighting for common languages
-- Secure cookie-based authentication
-- Password reset flow (SMTP optional)
+- Secure cookie-based authentication via Supabase Auth
+- Out-of-the-box password reset flows and email verification
 - API request logging for snippet endpoints
 - Responsive UI for desktop and mobile
+- Automated daily health checks via Vercel Cron
 
 ## Tech Stack
 
 - Framework: Next.js 16 (App Router)
-- Runtime/Deploy: Cloudflare Workers via `@opennextjs/cloudflare`
-- Database: Cloudflare D1 (binding: `DB`)
+- Runtime/Deploy: Vercel
+- Database: Supabase (PostgreSQL)
+- Authentication: Supabase Auth (GoTrue)
 - Frontend: React 19 + Tailwind CSS 4
 - Language: TypeScript
-- Email: Nodemailer (for password reset)
 
 ## Getting Started
 
@@ -34,8 +35,8 @@ Snippit is a modern code snippet manager built with Next.js App Router and deplo
 
 - Node.js 20+
 - npm
-- Cloudflare account (for D1 + deployment)
-- Wrangler CLI (installed as a dev dependency)
+- Supabase CLI
+- Vercel CLI (optional)
 
 ### 1. Install dependencies
 
@@ -43,71 +44,43 @@ Snippit is a modern code snippet manager built with Next.js App Router and deplo
 npm install
 ```
 
-### 2. Configure D1
+### 2. Configure Environment Variables
 
-Create a D1 database if needed:
-
-```bash
-npx wrangler d1 create snippit
-```
-
-Set your `database_id` in [wrangler.jsonc](wrangler.jsonc) under `d1_databases`.
-
-Apply schema locally:
+Copy `.env.example` to `.env` and fill in your Supabase connection strings:
 
 ```bash
-npx wrangler d1 execute snippit --local --file=schema.sql
+cp .env.example .env
 ```
 
-Apply schema remotely:
+Your `.env` should include keys like `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `CRON_SECRET`.
+
+### 3. Configure Supabase
+
+Link your local project to your remote Supabase instance:
 
 ```bash
-npx wrangler d1 execute snippit --remote --file=schema.sql
+npx supabase link --project-ref your-project-ref
 ```
 
-### 3. Configure environment variables (optional for reset emails)
+Push the initial schema to the database:
 
-Password reset emails are sent only when SMTP values are configured.
-
-For local Worker runtime, place these in `.dev.vars`:
-
-```env
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-user
-SMTP_PASS=your-password
-SMTP_FROM="Snippit <no-reply@example.com>"
+```bash
+npx supabase db push
 ```
-
-Without SMTP settings, reset requests still succeed and log a warning, and in non-production the reset link is returned in the API response.
 
 ### 4. Run the app
 
-Next.js development server:
+Start the Next.js development server:
 
 ```bash
 npm run dev
 ```
 
-Cloudflare Worker preview (OpenNext build + preview):
+## Deployment (Vercel)
 
-```bash
-npm run preview
-```
+Snippit is optimized for Vercel. You can deploy it seamlessly by connecting your GitHub repository to Vercel. Make sure to map all your `.env` variables to Vercel's Environment Variables settings.
 
-## Deployment (Cloudflare Workers)
-
-Build and deploy with OpenNext + Wrangler:
-
-```bash
-npm run deploy
-```
-
-Other useful scripts:
-
-- `npm run upload` - build and upload Worker bundle
-- `npm run cf-typegen` - regenerate Cloudflare env typings
+The project includes a `vercel.json` file that automatically configures a daily cron job to keep your Supabase instance active.
 
 ## Project Structure
 
@@ -116,11 +89,13 @@ snippit/
 ├── src/app/
 │   ├── api/
 │   │   ├── auth/
+│   │   │   ├── confirm/route.ts
 │   │   │   ├── login/route.ts
 │   │   │   ├── logout/route.ts
 │   │   │   ├── me/route.ts
 │   │   │   ├── register/route.ts
 │   │   │   └── reset-password/route.ts
+│   │   ├── cron/health/route.ts
 │   │   └── snippets/
 │   │       ├── route.ts
 │   │       └── [id]/route.ts
@@ -130,28 +105,29 @@ snippit/
 │   ├── register/page.tsx
 │   └── reset-password/page.tsx
 ├── lib/
-│   ├── auth/
+│   ├── supabase/
+│   │   ├── client.ts
+│   │   ├── server.ts
+│   │   └── middleware.ts
 │   ├── api-logger.ts
 │   ├── codemirror-theme.ts
-│   ├── constants.ts
-│   └── d1.ts
-├── schema.sql
-├── open-next.config.ts
-├── wrangler.jsonc
+│   └── constants.ts
+├── supabase/
+│   └── migrations/
+├── vercel.json
 └── middleware.ts
 ```
 
 ## API Endpoints
 
-Authentication:
+Authentication (Supabase wrappers):
 
 - `POST /api/auth/login`
 - `POST /api/auth/register`
-- `GET /api/auth/confirm?token=...`
+- `GET /api/auth/confirm?token_hash=...&type=...`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
-- `POST /api/auth/reset-password` (request reset link)
-- `PUT /api/auth/reset-password` (set new password)
+- `POST /api/auth/reset-password` (request reset / set new password)
 
 Snippets:
 
@@ -160,11 +136,15 @@ Snippets:
 - `PATCH /api/snippets/[id]`
 - `DELETE /api/snippets/[id]`
 
+Cron:
+
+- `GET /api/cron/health`
+
 ## Notes
 
-- Database access is handled through [lib/d1.ts](lib/d1.ts) using `getCloudflareContext()`.
-- The app ensures required tables/indexes via `ensureD1Schema()` on runtime access.
-- Session cookie name: `snippit_session`.
+- Supabase Clients are created via `@supabase/ssr` methods to properly share cookies between Next.js server components, client components, and API routes.
+- The `api-logger.ts` handles request logging automatically when wrapping endpoints with `withAPILogging()`.
+- Ensure `CRON_SECRET` is set in production to protect your health check endpoint.
 
 ## Contributing
 
