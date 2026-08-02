@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { d1Execute, d1Rows, ensureD1Schema } from "@/lib/d1";
+import { db } from "@/lib/supabase";
 
 export const SESSION_COOKIE_NAME = "snippit_session";
 const SESSION_DURATION_DAYS = 30;
@@ -42,17 +42,23 @@ function generateToken(): string {
 export async function createSession(
   user: SessionUser,
 ): Promise<{ token: string; expiresAt: string }> {
-  await ensureD1Schema();
-
   const token = generateToken();
   const now = new Date();
   const expires = new Date(now);
   expires.setDate(expires.getDate() + SESSION_DURATION_DAYS);
 
-  await d1Execute(
-    `INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`,
-    [token, user.id, expires.toISOString(), now.toISOString()],
-  );
+  const { error } = await db
+    .from("sessions")
+    .insert({
+      token,
+      user_id: user.id,
+      expires_at: expires.toISOString(),
+      created_at: now.toISOString(),
+    });
+    
+  if (error) {
+    console.error("createSession error:", error);
+  }
 
   return { token, expiresAt: expires.toISOString() };
 }
@@ -60,37 +66,34 @@ export async function createSession(
 export async function getSessionByToken(
   token: string,
 ): Promise<SessionResult | null> {
-  await ensureD1Schema();
+  const { data, error } = await db
+    .from("sessions")
+    .select("token, expires_at, user_id, users (id, email)")
+    .eq("token", token)
+    .gt("expires_at", new Date().toISOString())
+    .limit(1)
+    .single();
 
-  const rows = await d1Rows<{
-    token: string;
-    expires_at: string;
-    user_id: string;
-    email: string;
-  }>(
-    `
-    SELECT s.token, s.expires_at, u.id as user_id, u.email
-    FROM sessions s
-    INNER JOIN users u ON u.id = s.user_id
-    WHERE s.token = ?
-      AND s.expires_at > ?
-    LIMIT 1
-    `,
-    [token, new Date().toISOString()],
-  );
-
-  const row = rows[0];
-
-  if (!row) {
+  if (error) {
+    if (error.code !== "PGRST116") {
+      console.error("getSessionByToken error:", error);
+    }
     return null;
   }
 
+  if (!data || !data.users) {
+    return null;
+  }
+
+  // Handle Supabase joining returning array or object
+  const user = Array.isArray(data.users) ? data.users[0] : data.users;
+
   return {
-    token: row.token,
-    expiresAt: row.expires_at,
+    token: data.token,
+    expiresAt: data.expires_at,
     user: {
-      id: row.user_id,
-      email: row.email,
+      id: user.id,
+      email: user.email,
     },
   };
 }
@@ -108,18 +111,16 @@ export async function getSessionFromRequest(
 }
 
 export async function deleteSession(token: string): Promise<void> {
-  await ensureD1Schema();
-  await d1Execute(`DELETE FROM sessions WHERE token = ?`, [token]);
+  await db.from("sessions").delete().eq("token", token);
 }
 
 export async function deleteSessionsForUser(userId: string): Promise<void> {
-  await ensureD1Schema();
-  await d1Execute(`DELETE FROM sessions WHERE user_id = ?`, [userId]);
+  await db.from("sessions").delete().eq("user_id", userId);
 }
 
 export async function pruneExpiredSessions(): Promise<void> {
-  await ensureD1Schema();
-  await d1Execute(`DELETE FROM sessions WHERE expires_at <= ?`, [
-    new Date().toISOString(),
-  ]);
+  await db
+    .from("sessions")
+    .delete()
+    .lte("expires_at", new Date().toISOString());
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { d1Execute, ensureD1Schema } from "@/lib/d1";
+import { db } from "@/lib/supabase";
 
 interface LogData {
   ip_address: string;
@@ -88,42 +88,26 @@ function sanitizeQueryParams(
 
 export async function logRequest(data: LogData) {
   try {
-    await ensureD1Schema();
-
-    await d1Execute(
-      `
-      INSERT INTO request_logs (
-        id,
-        ip_address,
-        user_agent,
-        method,
-        url,
-        headers,
-        query_params,
-        body,
-        response_body,
-        response_status,
-        response_time,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        crypto.randomUUID(),
-        data.ip_address,
-        data.user_agent,
-        data.method,
-        data.url,
-        JSON.stringify(data.headers || {}),
-        JSON.stringify(data.query_params || {}),
-        data.body === undefined ? null : JSON.stringify(data.body),
+    const { error } = await db.from("request_logs").insert({
+      ip_address: data.ip_address,
+      user_agent: data.user_agent,
+      method: data.method,
+      url: data.url,
+      headers: JSON.stringify(data.headers || {}),
+      query_params: JSON.stringify(data.query_params || {}),
+      body: data.body === undefined ? null : JSON.stringify(data.body),
+      response_body:
         data.response_body === undefined
           ? null
           : JSON.stringify(data.response_body),
-        data.response_status,
-        data.response_time,
-        new Date().toISOString(),
-      ],
-    );
+      response_status: data.response_status,
+      response_time: data.response_time,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("Error inserting request log into Supabase:", error);
+    }
   } catch (error) {
     console.error("Error logging request:", error);
   }

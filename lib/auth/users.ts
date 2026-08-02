@@ -1,4 +1,4 @@
-import { d1Execute, d1Rows, ensureD1Schema } from "@/lib/d1";
+import { db } from "@/lib/supabase";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
 export interface UserRecord {
@@ -21,59 +21,59 @@ export function normalizeEmail(email: string): string {
 export async function findUserByEmail(
   email: string,
 ): Promise<UserRecord | null> {
-  await ensureD1Schema();
+  const { data, error } = await db
+    .from("users")
+    .select("*")
+    .eq("email", normalizeEmail(email))
+    .limit(1)
+    .single();
 
-  const rows = await d1Rows<UserRecord>(
-    `SELECT * FROM users WHERE email = ? LIMIT 1`,
-    [normalizeEmail(email)],
-  );
+  if (error && error.code !== "PGRST116") { // PGRST116 is no rows returned
+    console.error("findUserByEmail error:", error);
+  }
 
-  return rows[0] || null;
+  return data || null;
 }
 
 export async function findUserByResetToken(
   token: string,
 ): Promise<UserRecord | null> {
-  await ensureD1Schema();
+  const { data, error } = await db
+    .from("users")
+    .select("*")
+    .eq("reset_token", token)
+    .gt("reset_token_expires_at", new Date().toISOString())
+    .limit(1)
+    .single();
 
-  const rows = await d1Rows<UserRecord>(
-    `
-    SELECT * FROM users
-    WHERE reset_token = ?
-      AND reset_token_expires_at > ?
-    LIMIT 1
-    `,
-    [token, new Date().toISOString()],
-  );
+  if (error && error.code !== "PGRST116") {
+    console.error("findUserByResetToken error:", error);
+  }
 
-  return rows[0] || null;
+  return data || null;
 }
 
 export async function createUser(
   email: string,
   password: string,
 ): Promise<UserRecord> {
-  await ensureD1Schema();
-
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
   const passwordHash = await hashPassword(password);
+  
+  const { data, error } = await db
+    .from("users")
+    .insert({
+      email: normalizeEmail(email),
+      password_hash: passwordHash,
+      is_email_verified: 0,
+    })
+    .select("*")
+    .single();
 
-  await d1Execute(
-    `INSERT INTO users (id, email, password_hash, is_email_verified, email_confirm_token, email_confirm_expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, normalizeEmail(email), passwordHash, 0, null, null, now, now],
-  );
-
-  const created = await d1Rows<UserRecord>(
-    `SELECT * FROM users WHERE id = ? LIMIT 1`,
-    [id],
-  );
-
-  if (!created[0]) {
-    throw new Error("Failed to create user");
+  if (error || !data) {
+    throw new Error("Failed to create user: " + (error?.message || "unknown"));
   }
 
-  return created[0];
+  return data;
 }
 
 export async function validateUserCredentials(
@@ -95,51 +95,53 @@ export async function setUserEmailConfirmation(
   token: string,
   expiresAt: string,
 ): Promise<void> {
-  await ensureD1Schema();
+  const { error } = await db
+    .from("users")
+    .update({
+      email_confirm_token: token,
+      email_confirm_expires_at: expiresAt,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", userId);
 
-  await d1Execute(
-    `
-    UPDATE users
-    SET email_confirm_token = ?, email_confirm_expires_at = ?, updated_at = ?
-    WHERE id = ?
-    `,
-    [token, expiresAt, new Date().toISOString(), userId],
-  );
+  if (error) {
+    console.error("setUserEmailConfirmation error:", error);
+  }
 }
 
 export async function findUserByEmailConfirmationToken(
   token: string,
 ): Promise<UserRecord | null> {
-  await ensureD1Schema();
+  const { data, error } = await db
+    .from("users")
+    .select("*")
+    .eq("email_confirm_token", token)
+    .gt("email_confirm_expires_at", new Date().toISOString())
+    .eq("is_email_verified", 0)
+    .limit(1)
+    .single();
 
-  const rows = await d1Rows<UserRecord>(
-    `
-    SELECT * FROM users
-    WHERE email_confirm_token = ?
-      AND email_confirm_expires_at > ?
-      AND is_email_verified = 0
-    LIMIT 1
-    `,
-    [token, new Date().toISOString()],
-  );
+  if (error && error.code !== "PGRST116") {
+    console.error("findUserByEmailConfirmationToken error:", error);
+  }
 
-  return rows[0] || null;
+  return data || null;
 }
 
 export async function markUserEmailAsVerified(userId: string): Promise<void> {
-  await ensureD1Schema();
-
-  await d1Execute(
-    `
-    UPDATE users
-    SET is_email_verified = 1,
-        email_confirm_token = NULL,
-        email_confirm_expires_at = NULL,
-        updated_at = ?
-    WHERE id = ?
-    `,
-    [new Date().toISOString(), userId],
-  );
+  const { error } = await db
+    .from("users")
+    .update({
+      is_email_verified: 1,
+      email_confirm_token: null,
+      email_confirm_expires_at: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", userId);
+    
+  if (error) {
+    console.error("markUserEmailAsVerified error:", error);
+  }
 }
 
 export async function setUserResetToken(
@@ -147,44 +149,50 @@ export async function setUserResetToken(
   token: string,
   expiresAt: string,
 ): Promise<void> {
-  await ensureD1Schema();
-
-  await d1Execute(
-    `
-    UPDATE users
-    SET reset_token = ?, reset_token_expires_at = ?, updated_at = ?
-    WHERE id = ?
-    `,
-    [token, expiresAt, new Date().toISOString(), userId],
-  );
+  const { error } = await db
+    .from("users")
+    .update({
+      reset_token: token,
+      reset_token_expires_at: expiresAt,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", userId);
+    
+  if (error) {
+    console.error("setUserResetToken error:", error);
+  }
 }
 
 export async function clearUserResetToken(userId: string): Promise<void> {
-  await ensureD1Schema();
-
-  await d1Execute(
-    `
-    UPDATE users
-    SET reset_token = NULL, reset_token_expires_at = NULL, updated_at = ?
-    WHERE id = ?
-    `,
-    [new Date().toISOString(), userId],
-  );
+  const { error } = await db
+    .from("users")
+    .update({
+      reset_token: null,
+      reset_token_expires_at: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", userId);
+    
+  if (error) {
+    console.error("clearUserResetToken error:", error);
+  }
 }
 
 export async function updateUserPassword(
   userId: string,
   password: string,
 ): Promise<void> {
-  await ensureD1Schema();
   const passwordHash = await hashPassword(password);
 
-  await d1Execute(
-    `
-    UPDATE users
-    SET password_hash = ?, updated_at = ?
-    WHERE id = ?
-    `,
-    [passwordHash, new Date().toISOString(), userId],
-  );
+  const { error } = await db
+    .from("users")
+    .update({
+      password_hash: passwordHash,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", userId);
+    
+  if (error) {
+    console.error("updateUserPassword error:", error);
+  }
 }

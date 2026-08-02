@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAPILogging } from "@/lib/api-logger";
-import { d1Execute, d1Rows, ensureD1Schema } from "@/lib/d1";
 import { getSessionFromRequest } from "@/lib/auth/session";
+import { db } from "@/lib/supabase";
 
 interface SnippetRow {
   id: string;
@@ -34,7 +34,6 @@ export async function PATCH(
 ) {
   return withAPILogging(request, async () => {
     try {
-      await ensureD1Schema();
       const session = await getSessionFromRequest(request);
       const user = session?.user;
 
@@ -51,8 +50,7 @@ export async function PATCH(
       };
       const { title, language, code, is_favorite } = body;
 
-      const setClauses: string[] = [];
-      const paramsList: Array<string | number | null> = [];
+      const updates: Record<string, unknown> = {};
 
       if (title !== undefined) {
         if (typeof title !== "string") {
@@ -61,8 +59,7 @@ export async function PATCH(
             { status: 400 },
           );
         }
-        setClauses.push("title = ?");
-        paramsList.push(title);
+        updates.title = title;
       }
 
       if (language !== undefined) {
@@ -72,8 +69,7 @@ export async function PATCH(
             { status: 400 },
           );
         }
-        setClauses.push("language = ?");
-        paramsList.push(language);
+        updates.language = language;
       }
 
       if (code !== undefined) {
@@ -83,48 +79,37 @@ export async function PATCH(
             { status: 400 },
           );
         }
-        setClauses.push("code = ?");
-        paramsList.push(code);
+        updates.code = code;
       }
 
       if (is_favorite !== undefined) {
-        setClauses.push("is_favorite = ?");
-        paramsList.push(is_favorite ? 1 : 0);
+        updates.is_favorite = is_favorite ? 1 : 0;
       }
 
-      if (setClauses.length === 0) {
+      if (Object.keys(updates).length === 0) {
         return NextResponse.json(
           { error: "No fields to update" },
           { status: 400 },
         );
       }
 
-      setClauses.push("updated_at = ?");
-      paramsList.push(new Date().toISOString());
+      const { data, error } = await db
+        .from("snippets")
+        .update(updates)
+        .eq("id", id)
+        .eq("owner_id", user.id)
+        .select("*")
+        .single();
 
-      const result = await d1Execute(
-        `UPDATE snippets SET ${setClauses.join(", ")} WHERE id = ? AND owner_id = ?`,
-        [...paramsList, id, user.id],
-      );
-
-      if (result.changes === 0) {
-        return NextResponse.json(
-          { error: "Snippet not found" },
-          { status: 404 },
-        );
+      if (error) {
+        if (error.code === "PGRST116") {
+          return NextResponse.json(
+            { error: "Snippet not found" },
+            { status: 404 },
+          );
+        }
+        throw error;
       }
-
-      const rows = await d1Rows<SnippetRow>(
-        `
-        SELECT id, title, language, code, is_favorite, owner_id, created_at, updated_at
-        FROM snippets
-        WHERE id = ? AND owner_id = ?
-        LIMIT 1
-        `,
-        [id, user.id],
-      );
-
-      const data = rows[0];
 
       return NextResponse.json({ snippet: normalizeSnippet(data) });
     } catch (error) {
@@ -144,7 +129,6 @@ export async function DELETE(
 ) {
   return withAPILogging(request, async () => {
     try {
-      await ensureD1Schema();
       const session = await getSessionFromRequest(request);
       const user = session?.user;
 
@@ -154,10 +138,15 @@ export async function DELETE(
 
       const { id } = await params;
 
-      await d1Execute(`DELETE FROM snippets WHERE id = ? AND owner_id = ?`, [
-        id,
-        user.id,
-      ]);
+      const { error } = await db
+        .from("snippets")
+        .delete()
+        .eq("id", id)
+        .eq("owner_id", user.id);
+
+      if (error) {
+        throw error;
+      }
 
       return NextResponse.json({ success: true });
     } catch (error) {
