@@ -13,12 +13,16 @@ export default function SupabaseListener() {
     
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        if (pathname === "/" || pathname === "/login" || pathname === "/register") {
-          router.push("/dashboard");
-        } else {
-          router.refresh();
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth event:", event, session ? "Session found" : "No session");
+      
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        if (session) {
+          if (pathname === "/" || pathname === "/login" || pathname === "/register") {
+            router.push("/dashboard");
+          } else {
+            router.refresh();
+          }
         }
       } else if (event === "SIGNED_OUT") {
         router.refresh();
