@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAPILogging } from "@/lib/api-logger";
-import { getSessionFromRequest } from "@/lib/auth/session";
-import { db } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 interface SnippetRow {
   id: string;
@@ -31,8 +30,8 @@ function normalizeSnippet(row: SnippetRow) {
 export async function GET(request: NextRequest) {
   return withAPILogging(request, async () => {
     try {
-      const session = await getSessionFromRequest(request);
-      const user = session?.user;
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
         Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 10;
       const offset = (safePage - 1) * safeLimit;
 
-      let query = db
+      let query = supabase
         .from("snippets")
         .select("*", { count: "exact" })
         .eq("owner_id", user.id);
@@ -98,8 +97,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withAPILogging(request, async () => {
     try {
-      const session = await getSessionFromRequest(request);
-      const user = session?.user;
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from("snippets")
         .insert({
           title,

@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionFromRequest } from "@/lib/auth/session";
 import { withAPILogging } from "@/lib/api-logger";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   return withAPILogging(request, async () => {
     try {
-      const session = await getSessionFromRequest(request);
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (!session) {
-        return NextResponse.json({ user: null }, { status: 401 });
+      if (!user) {
+        return NextResponse.json({ user: null });
       }
 
-      return NextResponse.json({ user: session.user }, { status: 200 });
+      return NextResponse.json({
+        user: {
+          id: user.id,
+          email: user.email,
+        },
+      });
     } catch (error) {
-      console.error("Get session user error:", error);
+      console.error("Get current user error:", error);
       return NextResponse.json(
         { error: "An unexpected error occurred" },
         { status: 500 },

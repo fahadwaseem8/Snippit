@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { deleteSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { withAPILogging } from "@/lib/api-logger";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   return withAPILogging(request, async () => {
     try {
-      const cookieStore = await cookies();
-      const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+      const supabase = await createClient();
+      await supabase.auth.signOut();
 
-      if (sessionToken) {
-        await deleteSession(sessionToken);
-      }
-
-      const response = NextResponse.json({ success: true });
-      response.cookies.delete(SESSION_COOKIE_NAME);
-      return response;
+      return NextResponse.json({ success: true });
     } catch (error) {
       console.error("Logout error:", error);
-      return NextResponse.json({ error: "Logout failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "An unexpected error occurred" },
+        { status: 500 },
+      );
     }
   });
 }

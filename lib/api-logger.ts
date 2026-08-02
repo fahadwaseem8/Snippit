@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 interface LogData {
   ip_address: string;
@@ -88,7 +88,8 @@ function sanitizeQueryParams(
 
 export async function logRequest(data: LogData) {
   try {
-    const { error } = await db.from("request_logs").insert({
+    const supabase = await createClient();
+    const { error } = await supabase.from("request_logs").insert({
       ip_address: data.ip_address,
       user_agent: data.user_agent,
       method: data.method,

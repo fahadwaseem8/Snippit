@@ -1,41 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
-import {
-  findUserByEmailConfirmationToken,
-  markUserEmailAsVerified,
-} from "@/lib/auth/users";
-import { withAPILogging } from "@/lib/api-logger";
+import { type EmailOtpType } from '@supabase/supabase-js'
+import { type NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
 export async function GET(request: NextRequest) {
-  return withAPILogging(request, async () => {
-    try {
-      const token = request.nextUrl.searchParams.get("token") || "";
+  const { searchParams } = new URL(request.url)
+  const token_hash = searchParams.get('token_hash')
+  const type = searchParams.get('type') as EmailOtpType | null
+  const next = searchParams.get('next') ?? '/dashboard'
 
-      if (!token) {
-        const redirectUrl = new URL(
-          "/login?verified=invalid",
-          request.nextUrl.origin,
-        );
-        return NextResponse.redirect(redirectUrl);
-      }
+  if (token_hash && type) {
+    const supabase = await createClient()
 
-      const user = await findUserByEmailConfirmationToken(token);
-
-      if (!user) {
-        const redirectUrl = new URL(
-          "/login?verified=invalid",
-          request.nextUrl.origin,
-        );
-        return NextResponse.redirect(redirectUrl);
-      }
-
-      await markUserEmailAsVerified(user.id);
-
-      const redirectUrl = new URL("/login?verified=1", request.nextUrl.origin);
-      return NextResponse.redirect(redirectUrl);
-    } catch (error) {
-      console.error("Confirm signup error:", error);
-      const redirectUrl = new URL("/login?verified=error", request.nextUrl.origin);
-      return NextResponse.redirect(redirectUrl);
+    const { error } = await supabase.auth.verifyOtp({
+      type,
+      token_hash,
+    })
+    
+    if (!error) {
+      // redirect user to specified redirect URL or root of app
+      redirect(next)
     }
-  });
+  }
+
+  // redirect the user to an error page with some instructions
+  redirect('/login?error=Invalid%20or%20expired%20confirmation%20link')
 }

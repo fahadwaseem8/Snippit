@@ -1,111 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createResetToken, sendPasswordReset } from "@/lib/auth/reset";
-import {
-  clearUserResetToken,
-  findUserByEmail,
-  findUserByResetToken,
-  setUserResetToken,
-  updateUserPassword,
-} from "@/lib/auth/users";
-import { deleteSessionsForUser } from "@/lib/auth/session";
 import { withAPILogging } from "@/lib/api-logger";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   return withAPILogging(request, async () => {
     try {
-      const body = (await request.json()) as { email?: unknown };
-      const email = typeof body.email === "string" ? body.email : "";
+      const body = await request.json();
+      const { email, password } = body;
+      const supabase = await createClient();
 
-      if (!email) {
-        return NextResponse.json(
-          { error: "Email is required" },
-          { status: 400 },
-        );
+      if (email && !password) {
+        // Request reset link
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${new URL(request.url).origin}/reset-password`,
+        });
+
+        if (error) {
+          return NextResponse.json(
+            { error: error.message },
+            { status: 400 },
+          );
+        }
+
+        return NextResponse.json({
+          message: "If an account exists, a reset link has been sent.",
+        });
+      } else if (password) {
+        // Actually reset the password using the active session from the emailed link
+        const { error } = await supabase.auth.updateUser({
+          password: password,
+        });
+
+        if (error) {
+          return NextResponse.json(
+            { error: error.message },
+            { status: 400 },
+          );
+        }
+
+        return NextResponse.json({ success: true });
       }
 
-      const user = await findUserByEmail(email);
-
-      // Do not reveal whether an email exists.
-      if (!user) {
-        return NextResponse.json(
-          { message: "If that email exists, a reset link has been sent." },
-          { status: 200 },
-        );
-      }
-
-      const token = createResetToken();
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 30).toISOString();
-
-      await setUserResetToken(user.id, token, expiresAt);
-
-      const { resetLink } = await sendPasswordReset(
-        user.email,
-        request.nextUrl.origin,
-        token,
-      );
-
-      const payload: { message: string; resetLink?: string } = {
-        message: "If that email exists, a reset link has been sent.",
-      };
-
-      if (process.env.NODE_ENV !== "production") {
-        payload.resetLink = resetLink;
-      }
-
-      return NextResponse.json(payload, { status: 200 });
-    } catch (error) {
-      console.error("Password reset error:", error);
       return NextResponse.json(
-        { error: "An unexpected error occurred" },
-        { status: 500 },
+        { error: "Invalid request" },
+        { status: 400 },
       );
-    }
-  });
-}
-
-export async function PUT(request: NextRequest) {
-  return withAPILogging(request, async () => {
-    try {
-      const body = (await request.json()) as {
-        token?: unknown;
-        password?: unknown;
-      };
-      const token = body.token;
-      const password = body.password;
-
-      if (!token || typeof token !== "string") {
-        return NextResponse.json(
-          { error: "Reset token is required" },
-          { status: 400 },
-        );
-      }
-
-      if (!password || typeof password !== "string" || password.length < 6) {
-        return NextResponse.json(
-          { error: "Password must be at least 6 characters" },
-          { status: 400 },
-        );
-      }
-
-      const user = await findUserByResetToken(token);
-
-      if (!user) {
-        return NextResponse.json(
-          { error: "Invalid or expired reset token" },
-          { status: 400 },
-        );
-      }
-
-      await updateUserPassword(user.id, password);
-      await clearUserResetToken(user.id);
-      await deleteSessionsForUser(user.id);
-
-      return NextResponse.json({
-        success: true,
-        message: "Password updated successfully",
-      });
     } catch (error) {
-      console.error("Password update error:", error);
+      console.error("Reset password error:", error);
       return NextResponse.json(
         { error: "An unexpected error occurred" },
         { status: 500 },

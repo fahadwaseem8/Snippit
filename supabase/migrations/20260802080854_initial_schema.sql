@@ -1,24 +1,3 @@
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  is_email_verified SMALLINT NOT NULL DEFAULT 0,
-  email_confirm_token TEXT,
-  email_confirm_expires_at TIMESTAMP WITH TIME ZONE,
-  reset_token TEXT,
-  reset_token_expires_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-  token TEXT PRIMARY KEY,
-  user_id UUID NOT NULL,
-  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS request_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), 
   ip_address TEXT NOT NULL,
@@ -40,7 +19,7 @@ CREATE TABLE IF NOT EXISTS snippets (
   language TEXT NOT NULL DEFAULT 'plaintext',
   code TEXT NOT NULL,
   is_favorite SMALLINT NOT NULL DEFAULT 0, 
-  owner_id UUID NOT NULL, 
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, 
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT snippets_language_check CHECK (language IN (
@@ -69,10 +48,6 @@ BEFORE UPDATE ON snippets
 FOR EACH ROW
 EXECUTE FUNCTION update_modified_column();
 
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_email_confirm_token ON users(email_confirm_token);
-CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_snippets_owner_id ON snippets(owner_id);
 CREATE INDEX IF NOT EXISTS idx_snippets_updated_at ON snippets(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_snippets_favorites ON snippets(owner_id, is_favorite);

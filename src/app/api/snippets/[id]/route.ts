@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAPILogging } from "@/lib/api-logger";
-import { getSessionFromRequest } from "@/lib/auth/session";
-import { db } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 interface SnippetRow {
   id: string;
@@ -34,8 +33,8 @@ export async function PATCH(
 ) {
   return withAPILogging(request, async () => {
     try {
-      const session = await getSessionFromRequest(request);
-      const user = session?.user;
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -93,7 +92,7 @@ export async function PATCH(
         );
       }
 
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from("snippets")
         .update(updates)
         .eq("id", id)
@@ -129,8 +128,8 @@ export async function DELETE(
 ) {
   return withAPILogging(request, async () => {
     try {
-      const session = await getSessionFromRequest(request);
-      const user = session?.user;
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -138,7 +137,7 @@ export async function DELETE(
 
       const { id } = await params;
 
-      const { error } = await db
+      const { error } = await supabase
         .from("snippets")
         .delete()
         .eq("id", id)
